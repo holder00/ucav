@@ -80,7 +80,7 @@ for i in range(test_num):
     # pathhh = get_latest_modified_file_path("./save_weights")
     model = PPO2.load(pathhh)
     # model = A2C.load(pathhh)
-    # model = ppo(MlpPolicy, env, verbose=1, tensorboard_log=log_dir)
+    # model = PPO2(MlpPolicy, env, verbose=1, tensorboard_log=log_dir)
     # model = ppo.PPOTrainer(MlpPolicy, env)
     obs = env.reset()
     
@@ -103,7 +103,7 @@ for i in range(test_num):
         action, _states = model.predict(obs)
         hist_obs[i] = obs
         hist_action[i] = action
-        print(action)
+        print(obs)
         obs, rewards, dones, info = env.step(action)
         # print(obs.astype(np.int64))
         env.render()

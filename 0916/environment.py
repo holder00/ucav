@@ -52,8 +52,8 @@ class MyEnv(gym.Env):
 
         # 状態の範囲を定義
         self.ofs_num = self.red_num + self.blue_num
-        LOW = np.tile(np.append([0,0,0,0,-np.pi], [0]*(self.blue_num+self.red_num)),(self.ofs_num))   #マップ横、マップ縦、被射撃、HP、距離
-        HIGH = np.tile(np.append([1,1,1,2,np.pi],[self.WINDOW_SIZE_lon*2]*(self.blue_num+self.red_num)),(self.ofs_num))
+        LOW = np.tile(np.append([0,0,0,0,-1,-1], [0]*(self.blue_num+self.red_num)),(self.ofs_num))   #被射撃、HP、距離
+        HIGH = np.tile(np.append([1,2,1,1,1,1],[1]*(self.blue_num+self.red_num)),(self.ofs_num))
         self.observation_space = gym.spaces.Box(low=LOW, high=HIGH)
         
         self.reset()
@@ -107,14 +107,19 @@ class MyEnv(gym.Env):
             self.before_distance[i] = np.linalg.norm(self.blue[i].pos - self.red[i].pos)
             
         distances = self.distances_calc(position)
-        # print(observation[0:self.blue_num+self.red_num,obs_index_distance:self.red_num*self.blue_num*2].shape)
-        # print(self.red_num*self.blue_num*2)
+        angles = self.angles_calc(position)
+
         for i in range(self.blue_num):
             index = i*self.index_id
-            observation[index+5:index+self.index_id] = distances[i,:]
+            print(observation[index+5:index+self.index_id])
+            print("0000000000")
+            print(distances[i,:])
+            # observation[index+5:index+self.index_id] = np.append(distances[i,:]/np.sqrt(self.WINDOW_SIZE_lat*self.WINDOW_SIZE_lat+self.WINDOW_SIZE_lon*self.WINDOW_SIZE_lon),angles[i,:])
+            observation[index+6:index+self.index_id] = distances[i,:]/np.sqrt(self.WINDOW_SIZE_lat*self.WINDOW_SIZE_lat+self.WINDOW_SIZE_lon*self.WINDOW_SIZE_lon)
         for i in range(self.red_num):
             index = (i+self.blue_num)*self.index_id
-            observation[index+5:index+self.index_id] = distances[i+self.blue_num,:]
+            # observation[index+5:index+self.index_id] = np.append(distances[i+self.blue_num,:]/np.sqrt(self.WINDOW_SIZE_lat*self.WINDOW_SIZE_lat+self.WINDOW_SIZE_lon*self.WINDOW_SIZE_lon),angles[i+self.blue_num,:])
+            observation[index+6:index+self.index_id] = distances[i+self.blue_num,:]/np.sqrt(self.WINDOW_SIZE_lat*self.WINDOW_SIZE_lat+self.WINDOW_SIZE_lon*self.WINDOW_SIZE_lon)
         # observation[0:self.blue_num+self.red_num,obs_index_distance:obs_index_distance+(self.red_num+self.blue_num)] = distances[0:self.blue_num+self.red_num,0:self.blue_num+self.red_num]
         self.temp = observation   
             
@@ -217,7 +222,7 @@ class MyEnv(gym.Env):
         for i in range(self.blue_num):
             # 状態の作成
             index = i*self.index_id
-            # position[i] = self.blue[i].pos
+            position[i] = self.blue[i].pos
             # observation[index:index+2] = position[i]
             observation[index] = self.blue[i].hitpoint        
             observation[index+1] = self.blue[i].mrm_num
@@ -230,11 +235,13 @@ class MyEnv(gym.Env):
             else:
                 observation[index+3] = 1
             # observation[index+4] = self.blue[i].aa
+            observation[index+4] = np.cos(self.blue[i].ops_az())
+            observation[index+5] = np.sin(self.blue[i].ops_az())
                 
         for i in range(self.red_num):
             # 状態の作成
             index = (i+self.blue_num)*self.index_id
-            # position[i+self.blue_num] = self.red[i].pos
+            position[i+self.blue_num] = self.red[i].pos
             # observation[index:index+2] = position[i+self.blue_num]
             observation[index] = self.red[i].hitpoint
             observation[index+1] = self.red[i].mrm_num
@@ -247,21 +254,26 @@ class MyEnv(gym.Env):
             else:
                 observation[index+3] = 1
             # observation[index+4] = self.red[i].aa
+            observation[index+4] = np.cos(self.red[i].ops_az())
+            observation[index+5] = np.sin(self.red[i].ops_az())
         distances = self.distances_calc(position)
+        angles = self.angles_calc(position)
+        
         for i in range(self.blue_num):
             index = i*self.index_id
-
-            observation[index+5:index+self.index_id] = distances[i,:]
+            # observation[index+5:index+self.index_id] = np.append(distances[i,:]/np.sqrt(self.WINDOW_SIZE_lat*self.WINDOW_SIZE_lat+self.WINDOW_SIZE_lon*self.WINDOW_SIZE_lon),angles[i,:])
+            observation[index+6:index+self.index_id] = distances[i,:]/np.sqrt(self.WINDOW_SIZE_lat*self.WINDOW_SIZE_lat+self.WINDOW_SIZE_lon*self.WINDOW_SIZE_lon)
+        
         for i in range(self.red_num):
             index = (i+self.blue_num)*self.index_id
-            observation[index+5:index+self.index_id] = distances[i+self.blue_num,:]        
+            observation[index+6:index+self.index_id] = distances[i+self.blue_num,:]/np.sqrt(self.WINDOW_SIZE_lat*self.WINDOW_SIZE_lat+self.WINDOW_SIZE_lon*self.WINDOW_SIZE_lon)
         
         for i in range(self.blue_num):
             if self.blue[i].inrange:
                 reward_inrange = reward_inrange + 1
         for i in range(self.red_num):
             if self.red[i].inrange:
-                reward_inrange = reward_inrange - 0.25
+                reward_inrange = reward_inrange - 2
                 
         tgt_id = np.zeros(4)
         for i in range(self.blue_num):
@@ -293,9 +305,9 @@ class MyEnv(gym.Env):
             done = True
             self.timer = 0
             if (not is_red_reach and not self.reward_d == self.blue_num) or is_blue_reach:
-                self.reward_win = 1000000
-            elif is_red_reach or self.reward_d == self.blue_num or self.timer >= self.time_limit:
-                self.reward_win = -(self.red_num - self.reward_k)*1000
+                self.reward_win = 1
+            elif is_red_reach or self.reward_d == self.blue_num or not(self.reward_k == self.red_num) or self.timer >= self.time_limit:
+                self.reward_win = -4
         self.center_line = (np.min(reward_fw_blue) + np.max(reward_fw_red))/2
 
         self.blue_line = np.average(reward_fw_blue)
@@ -309,8 +321,8 @@ class MyEnv(gym.Env):
         #状況は今後の行動で好転させることができるが、事象は今後の行動で好転させることができない
         #ex)撃墜された”事象”＝発生した瞬間マイナス、しかし今後の行動で好転させることができない　前線が押されている”状況”＝現在はマイナス継続するとマイナス、しかし今後の行動で打開できる
 
-        reward_temp = 1000*reward_inrange -reward_tgt*0 - 50*self.reward_fire -10*np.sum(reward_ng) + 1000*reward_k_temp*self.reward_k- 100*reward_d_temp*0 + self.reward_win
-        reward = reward_temp * 0.001
+        reward_temp = 0.0001*reward_inrange -reward_tgt*0 - 0*self.reward_fire -0.0001*np.sum(reward_ng) + 0*reward_k_temp*self.reward_k + self.reward_win
+        reward = reward_temp
         
         self.reward_total = self.reward_total + reward 
         self.timer = self.timer + self.sim_dt 
@@ -389,7 +401,6 @@ class MyEnv(gym.Env):
             color_num = (255,0,0)
         else:
             color_num = (255,255,255)
-        print(temp.radar_range)
         cv2.ellipse(img, (int(temp.pos[0]), int(temp.pos[1])), (int(temp.radar_range+1), int(temp.radar_range+1)), -90-np.rad2deg(np.arctan2(temp.vec[0], temp.vec[1])), 180-np.rad2deg(temp.sensor_az), 180+np.rad2deg(temp.sensor_az), color_num)
 
    
@@ -448,6 +459,14 @@ class MyEnv(gym.Env):
         tmp_index = np.arange(position.shape[0])
         xx, yy = np.meshgrid(tmp_index, tmp_index)
         distances = np.linalg.norm(position[xx]-position[yy], axis=2)
+        
+        
+        return distances
+    
+    def angles_calc(self, position):
+        tmp_index = np.arange(position.shape[0])
+        xx, yy = np.meshgrid(tmp_index, tmp_index)
+        distances = np.linalg.norm(np.arctan2(position[xx],position[yy]), axis=2)
         
         return distances
         

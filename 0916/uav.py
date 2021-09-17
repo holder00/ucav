@@ -37,7 +37,7 @@ class uav:
         self.detect_launch_ML = False
         self.inrange = False
         self.mrm_num = 2
-        self.vel_limit = 10
+        self.vel_limit = 15
         self.vec = self.az2vec(self.az)
         self.hitpoint = 1.0
         
@@ -63,7 +63,7 @@ class uav:
                 self.tgt = tgt
                 
     def tgt_inrange(self):
-        self.radar_range = self.mrm_range*(np.abs(self.aa)/np.pi-1/2)+10
+        # self.radar_range = self.mrm_range*(np.abs(self.aa)/np.pi-1/2)+10
         if self.hitpoint > 0 and self.tgt.hitpoint != 0 and np.linalg.norm(self.pos - self.tgt.pos) < self.radar_range and np.abs(self.ops_az()) < self.sensor_az:
             self.inrange = True
         else:

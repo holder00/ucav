@@ -21,13 +21,15 @@ class missile(uav):
         self.destruction_angle = 10
         self.tgt = parent.tgt
         self.vel_limit = 100
-        self.Izz = 1000
+        self.Izz = 50
         self.thrust = 1.2
         self.detect_launch = False
         self.missile_tgt_lost = False
         self.mass = 1
         self.hitpoint = 250
         self.thrust_dt = 0.001
+        self.sensor_az = np.deg2rad(60)
+        self.radar_range = 500
         
     def update_status(self, sim_dt):
         if self.hitpoint > 0:
@@ -42,9 +44,7 @@ class missile(uav):
             self.pos_update_ctrl(sim_dt)
             
     def guidance_law(self, sim_dt):
-        if self.detect_launch:
-            self.com = -1*self.vec_norm((self.tgt.pos - self.pos))  
-        elif self.tgt.hitpoint == 0 and self.faction == "mrm":
+        if self.tgt.hitpoint == 0 or not self.tgt_inrange():
             self.com = np.array([0,0])
         else:
             self.com = self.vec_norm((self.tgt.pos - self.pos))

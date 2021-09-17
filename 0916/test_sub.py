@@ -70,9 +70,10 @@ if __name__ == '__main__':
     # Create the vectorized environment
     env = SubprocVecEnv([make_env(env_id, i) for i in range(num_cpu)])
 # 
-    model = PPO2(CustomPolicy, env, verbose=1, tensorboard_log="log")
+    # model = PPO2(CustomPolicy, env, verbose=1, tensorboard_log="log")
     # model = PPO2(CustomLSTMPolicy, env, verbose=1, tensorboard_log="log")
     # model = PPO2(MlpPolicy, env, verbose=1, policy_kwargs=dict(layers=[256, 256, 256, 256]), tensorboard_log="log")
+    model = PPO2(MlpPolicy, env, verbose=1, tensorboard_log="log")
     # model.learn(total_timesteps=25000)
     checkpoint_callback = CheckpointCallback(save_freq=10000, save_path='./save_weights/', name_prefix='rl_model')
     model.learn(total_timesteps=10000000, callback=checkpoint_callback)
