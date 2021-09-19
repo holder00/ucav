@@ -41,7 +41,7 @@ class uav:
         self.vec = self.az2vec(self.az)
         self.hitpoint = 1.0
         
-        self.cool_down_limit = 150
+        self.cool_down_limit = 200
         self.cool_down = self.cool_down_limit
         self.radar_range = 500
         self.mrm_range = 500

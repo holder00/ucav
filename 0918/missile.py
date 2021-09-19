@@ -22,7 +22,7 @@ class missile(uav):
         self.tgt = parent.tgt
         self.vel_limit = 100
         self.Izz = 50
-        self.thrust = 1.2
+        self.thrust = 1.5
         self.detect_launch = False
         self.missile_tgt_lost = False
         self.mass = 1

@@ -29,7 +29,7 @@ class MyEnv(gym.Env):
         self.blue_side = int(self.WINDOW_SIZE_lat/4)
         self.blue_safe_area = [self.WINDOW_SIZE_lat-self.blue_side,self.WINDOW_SIZE_lat]
         
-        self.red_num = self.blue_num
+        self.red_num = 2
         self.red_side = int(self.WINDOW_SIZE_lat/4)
         self.red_safe_area = [0,self.red_side]
         self.ng_range = 250
@@ -84,10 +84,13 @@ class MyEnv(gym.Env):
             self.red[i] = uav(self.red_side, self.WINDOW_SIZE_lon, self.red_safe_area,"red",i,0)
             
         for i in range(self.blue_num):
-            self.blue[i].tgt_update(self.red[i])
+            for j in range(self.red_num):
+                self.blue[i].tgt_update(self.red[j])
+                self.red[j].tgt_update(self.blue[i])
             
-        for i in range(self.red_num):
-            self.red[i].tgt_update(self.blue[i])
+        # for i in range(self.red_num):
+        #     for i in range(self.)
+            
                 
         for i in range(self.blue_num):
             # 状態の作成
@@ -104,7 +107,7 @@ class MyEnv(gym.Env):
             # observation[index:index+2] = position[i+self.blue_num]
             observation[index] = self.red[i].hitpoint
             # observation[i+self.blue_num*2] = np.array([self.blue[i].hitpoint, self.red[i].hitpoint])
-            self.before_distance[i] = np.linalg.norm(self.blue[i].pos - self.red[i].pos)
+            # self.before_distance[i] = np.linalg.norm(self.blue[i].pos - self.red[i].pos)
             
         distances = self.distances_calc(position)
         angles = self.angles_calc(position)
@@ -307,7 +310,7 @@ class MyEnv(gym.Env):
             if (not is_red_reach and not self.reward_d == self.blue_num and self.reward_k == self.red_num) or is_blue_reach:
                 self.reward_win = 1
             elif is_red_reach or self.reward_d == self.blue_num  or self.timer >= self.time_limit:
-                self.reward_win = -4
+                self.reward_win = -4 + 0.5*self.reward_k
         self.center_line = (np.min(reward_fw_blue) + np.max(reward_fw_red))/2
 
         self.blue_line = np.average(reward_fw_blue)
@@ -321,7 +324,7 @@ class MyEnv(gym.Env):
         #状況は今後の行動で好転させることができるが、事象は今後の行動で好転させることができない
         #ex)撃墜された”事象”＝発生した瞬間マイナス、しかし今後の行動で好転させることができない　前線が押されている”状況”＝現在はマイナス継続するとマイナス、しかし今後の行動で打開できる
 
-        reward_temp = 0.0001*reward_inrange -reward_tgt*0 - 0*self.reward_fire -0.0001*np.sum(reward_ng) + 0*reward_k_temp*self.reward_k + self.reward_win
+        reward_temp = 0.0001*reward_inrange -reward_tgt*0 - 0*self.reward_fire -0.0001*np.sum(reward_ng) + 0.0*reward_k_temp + self.reward_win
         reward = reward_temp
         
         self.reward_total = self.reward_total + reward 
@@ -336,9 +339,11 @@ class MyEnv(gym.Env):
         img = np.zeros((self.WINDOW_SIZE_lon, self.WINDOW_SIZE_lat, 3)) #画面初期化
         for i in range(self.blue_num):
             self.render_craft(img,self.blue[i])
-            self.render_craft(img,self.red[i])
             self.render_radar(img,self.blue[i])
             self.tgt_lines(img,self.blue[i])
+        
+        for i in range(self.red_num):
+            self.render_craft(img,self.red[i])
             # self.tgt_lines(img,self.red[i])
         for i in range(self.mrm_num):
             self.render_missile(img, self.mrm[i])

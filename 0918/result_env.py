@@ -38,7 +38,7 @@ class render_env:
         return blue_pos, red_pos, mrm_pos
 
 
-    def rend(env,hist_pos,f_color):
+    def rend(env,hist_pos,f_color , fig):
         time = hist_pos[:,0]
         num = hist_pos.shape[1]-1
         
@@ -46,7 +46,7 @@ class render_env:
             # pos = np.vstack(hist_pos[:,i+1])
             pos_temp = np.vstack(hist_pos[:,i+1].tolist())
             pos = pos_temp[np.all(pos_temp > 0, axis=1)]
-            fig1 = plt.figure(2)
+            fig1 = plt.figure(fig)
             plt.plot(pos[:,0],env.WINDOW_SIZE_lon-pos[:,1],'-',color = f_color)
         plt.grid('on')
         plt.xlim(0,env.WINDOW_SIZE_lat)

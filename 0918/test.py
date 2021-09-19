@@ -26,6 +26,17 @@ from gym.envs.registration import register
 from ray.rllib.agents import ppo
 from result_env import render_env
 
+import os
+import tensorflow as tf
+import logging
+import warnings
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.simplefilter(action='ignore', category=Warning)
+tf.get_logger().setLevel('INFO')
+tf.autograph.set_verbosity(0)
+tf.get_logger().setLevel(logging.ERROR)
+
 def get_latest_modified_file_path(dirname):
     target = os.path.join(dirname, '*')
     files = [(f, os.path.getmtime(f)) for f in glob(target)]
@@ -87,9 +98,9 @@ for i in range(test_num):
     obs = env.reset()
     
     plt.figure(1)
-    fig1 = plt.figure(1)
+    # fig1 = plt.figure(1)
     # plt.plot(winrate[0:i,0],winrate[0:i,1],'o-')
-    plt.plot(ER[0:i,0],ER[0:i,1],'o-')
+    # plt.plot(ER[0:i,0],ER[0:i,1],'o-')
     plt.grid('on')
     
     # x, y = ts2xy(load_results(log_dir), 'timesteps')
@@ -128,18 +139,19 @@ for i in range(test_num):
     del env_blue_pos[0]
     del env_red_pos[0]
     del env_mrm_pos[0]
-    
+    fig1 = plt.figure(1)
+    fig1.clf()
+ 
     hist_blue_pos = np.vstack(env_blue_pos)
     hist_red_pos = np.vstack(env_red_pos)
     hist_mrm_pos = np.vstack(env_mrm_pos)
     
-    render_env.rend(env,hist_blue_pos,"b")
-    render_env.rend(env,hist_red_pos,"r")
-    render_env.rend(env,hist_mrm_pos,"k")
+    render_env.rend(env,hist_blue_pos,"b",1)
+    render_env.rend(env,hist_red_pos,"r",1)
+    render_env.rend(env,hist_mrm_pos,"k",1)
+    
+    fig2 = plt.figure(2)
+    fig2.clf()  
     
     winrate[i] = np.array([i+1,win/(i+1)])
     rewards_total[i] = np.array([i+1,env.reward_total])
-    fig1 = plt.figure(1)
-    plt.clf()
-    fig2 = plt.figure(2)
-    plt.clf()

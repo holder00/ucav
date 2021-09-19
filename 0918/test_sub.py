@@ -19,6 +19,18 @@ from gym.envs.registration import register
 from stable_baselines.common.callbacks import CheckpointCallback
 from stable_baselines.bench import Monitor
 
+
+import os
+import tensorflow as tf
+import logging
+import warnings
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.simplefilter(action='ignore', category=Warning)
+tf.get_logger().setLevel('INFO')
+tf.autograph.set_verbosity(0)
+tf.get_logger().setLevel(logging.ERROR)
+
 # Custom MLP policy of three layers of size 128 each
 class CustomPolicy(FeedForwardPolicy):
     def __init__(self, *args, **kwargs):
