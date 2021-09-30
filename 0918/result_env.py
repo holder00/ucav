@@ -53,3 +53,39 @@ class render_env:
         plt.ylim(0,env.WINDOW_SIZE_lon)
         plt.show()
         plt.axes().set_aspect('equal')
+        
+    def rend_3d(env,hist_pos,f_color , fig):
+        time = hist_pos[:,0]
+        num = hist_pos.shape[1]-1
+        
+        for i in range(num):
+            # pos = np.vstack(hist_pos[:,i+1])
+            pos_temp = np.vstack(hist_pos[:,i+1].tolist())
+            pos = pos_temp[np.all(pos_temp > 0, axis=1)]
+            fig1 = plt.figure(fig)
+            ax = fig1.gca(projection='3d')
+            X = pos[:,0]
+            Y = pos[:,1]
+            Z = pos[:,2]
+            # max_range = np.array([X.max()-X.min(), Y.max()-Y.min(), Z.max()-Z.min()]).max() * 0.5
+            # mid_x = (X.max()+X.min()) * 0.5
+            # mid_y = (Y.max()+Y.min()) * 0.5
+            # mid_z = (Z.max()+Z.min()) * 0.5
+            # ax.set_xlim(mid_x - max_range, mid_x + max_range)
+            # ax.set_ylim(mid_y - max_range, mid_y + max_range)
+            # ax.set_zlim(mid_z - max_range, mid_z + max_range)
+            ax.plot(X, Y, Z)
+            # plt.plot(pos[:,0],env.WINDOW_SIZE_lon-pos[:,1],'-',color = f_color)
+            
+            
+        
+        
+        
+
+        
+        
+        plt.grid('on')
+        ax.set_xlim(0,env.WINDOW_SIZE_lat)
+        ax.set_xlim(0,env.WINDOW_SIZE_lon)
+        ax.set_xlim(0,env.WINDOW_SIZE_alt)
+        plt.show()
