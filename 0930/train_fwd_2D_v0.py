@@ -22,7 +22,7 @@ from ray.rllib.utils.framework import try_import_tf
 from ray.rllib.utils.test_utils import check_learning_achieved
 from ray.rllib.agents.ppo import ppo
 from ray.rllib.models import ModelCatalog
-from battle_field_strategy_2D_v0 import BattleFieldStrategy
+from environment_rllib import MyEnv
 from settings.initial_settings import *
 from settings.reset_conditions import reset_conditions
 #from modules.models import MyConv2DModel_v0B_Small_CBAM_1DConv_Share
@@ -53,17 +53,17 @@ def main():
 
     ModelCatalog.register_custom_model('my_model', DenseNetModelLarge)
 
-    config = {"env": BattleFieldStrategy,
-              "num_workers": NUM_WORKERS,
-              "num_gpus": NUM_GPUS,
-              "num_cpus_per_worker": NUM_CPUS_PER_WORKER,
-              "num_sgd_iter": NUM_SGD_ITER,
-              "lr": LEARNING_RATE,
-              "gamma": GAMMA,  # default=0.99
-              "model": {"custom_model": "my_model"}
-              # "framework": framework
-              }  # use tensorflow 2
-
+    # config = {"env": BattleFieldStrategy,
+    #           "num_workers": NUM_WORKERS,
+    #           "num_gpus": NUM_GPUS,
+    #           "num_cpus_per_worker": NUM_CPUS_PER_WORKER,
+    #           "num_sgd_iter": NUM_SGD_ITER,
+    #           "lr": LEARNING_RATE,
+    #           "gamma": GAMMA,  # default=0.99
+    #           "model": {"custom_model": "my_model"}
+    #           # "framework": framework
+    #           }  # use tensorflow 2
+    config = {"env": MyEnv,"num_gpus": 0,"num_workers": 1, "num_cpus_per_worker": 0}
     conditions_dir = os.path.join('./' + PROJECT + '/conditions/')
     if not os.path.exists(conditions_dir):
         os.makedirs(conditions_dir)

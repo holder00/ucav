@@ -17,6 +17,7 @@ from modules.resets import reset_red, reset_blue, reset_block
 from modules.observations import get_observation
 from modules.rewards import get_reward
 import cv2
+from get_obs import get_obs
 from reward_calc import reward_calc
 from uav import uav
 from missile import missile
@@ -24,6 +25,7 @@ from missile import missile
 class MyEnv(MultiAgentEnv):
     def __init__(self, config={}):
         super(MyEnv, self).__init__()
+        np.set_printoptions(precision=2,suppress=True)
         self.WINDOW_SIZE_lat = 1000 #画面サイズの決定
         self.WINDOW_SIZE_lon = 1000 #画面サイズの決定
 
@@ -60,13 +62,16 @@ class MyEnv(MultiAgentEnv):
 
         # 状態の範囲を定義
         self.ofs_num = self.red_num + self.blue_num
-        LOW = np.tile(np.append([0,0,0,0,-1,-1,0,0], [0]*(self.blue_num+self.red_num)),(self.ofs_num))   #被射撃、HP、距離
-        HIGH = np.tile(np.append([1,2,1,1,1,1,1,1],[1]*(self.blue_num+self.red_num)),(self.ofs_num))
+        #                         0:hit, 1:mrm, 2:inrange, 3:detect, 4:opscos, 5:opssin, 6:posx, 7:posy, 8~each_distances
+        LOW = np.tile(np.append( [0,0,0,0,-1,-1,-1, 0], [0]*(self.blue_num+self.red_num)),(self.ofs_num,1))   #被射撃、HP、距離
+        HIGH = np.tile(np.append([1,2,1,1, 1, 1, 2, 1], [2]*(self.blue_num+self.red_num)),(self.ofs_num,1))
+        # LOW = np.tile(np.append([0,0,0,0,-1,-1,0,0], [0]*(self.blue_num+self.red_num)),(self.blue_num,1))   #被射撃、HP、距離
+        # HIGH = np.tile(np.append([1,2,1,1,1,1,2,1],[2]*(self.blue_num+self.red_num)),(self.blue_num,1))
         self.observation_space = gym.spaces.Box(low=LOW, high=HIGH,shape=HIGH.shape)
+        
         
         obs = self.reset()
 
-        # obs = self.reset()
 
     def reset(self):
         obs = {}
@@ -75,11 +80,7 @@ class MyEnv(MultiAgentEnv):
         self.before_distance = np.zeros(self.blue_num)
         self.mrm = [0]*(self.blue_num*self.blue[0].mrm_num + self.red_num*self.red[0].mrm_num)
         self.mrm_num = 0
-        observation = np.zeros(self.observation_space.shape)
-        ops = np.zeros(self.observation_space.shape)
-        
-        obs_index_distance = (self.observation_space.shape[0]-(self.red_num+self.blue_num))*0+5
-        position = np.zeros([self.blue_num+self.red_num,2])
+
         self.reward_k = 0
         self.reward_d = 0
         self.reward_missile_lost = 0
@@ -87,7 +88,7 @@ class MyEnv(MultiAgentEnv):
         self.reward_win = 0
         self.reward_total = 0
         
-        self.index_id = int(self.observation_space.shape[0]/(self.blue_num+self.red_num))
+        self.index_id = int(self.observation_space.shape[1]/(self.blue_num+self.red_num))
         for i in range(self.blue_num):
             self.blue[i] = uav(self.WINDOW_SIZE_lat-self.blue_side, self.WINDOW_SIZE_lon, self.blue_safe_area,"blue",i,0)
             
@@ -98,47 +99,8 @@ class MyEnv(MultiAgentEnv):
             for j in range(self.red_num):
                 self.blue[i].tgt_update(self.red[j])
                 self.red[j].tgt_update(self.blue[i])
-            
-        # for i in range(self.red_num):
-        #     for i in range(self.)
-            
-                
-        for i in range(self.blue_num):
-            # 状態の作成
-            index = i*self.index_id
-            # position[i] = self.blue[i].pos
-            # observation[index:index+2] = position[i]
-            observation[index] = self.blue[i].hitpoint
-            
-        # print(observation)    
-        for i in range(self.red_num):
-            # 状態の作成
-            index = (i+self.blue_num)*self.index_id
-            # position[i+self.blue_num] = self.red[i].pos
-            # observation[index:index+2] = position[i+self.blue_num]
-            observation[index] = self.red[i].hitpoint
-            # observation[i+self.blue_num*2] = np.array([self.blue[i].hitpoint, self.red[i].hitpoint])
-            # self.before_distance[i] = np.linalg.norm(self.blue[i].pos - self.red[i].pos)
-            
-        distances = self.distances_calc(position)
-        angles = self.angles_calc(position)
-    
-        for i in range(self.blue_num):
-            index = i*self.index_id
-            # observation[index+5:index+self.index_id] = np.append(distances[i,:]/np.sqrt(self.WINDOW_SIZE_lat*self.WINDOW_SIZE_lat+self.WINDOW_SIZE_lon*self.WINDOW_SIZE_lon),angles[i,:])
-            observation[index+8:index+self.index_id] = distances[i,:]/np.sqrt(self.WINDOW_SIZE_lat*self.WINDOW_SIZE_lat+self.WINDOW_SIZE_lon*self.WINDOW_SIZE_lon)
-        for i in range(self.red_num):
-            index = (i+self.blue_num)*self.index_id
-            # observation[index+5:index+self.index_id] = np.append(distances[i+self.blue_num,:]/np.sqrt(self.WINDOW_SIZE_lat*self.WINDOW_SIZE_lat+self.WINDOW_SIZE_lon*self.WINDOW_SIZE_lon),angles[i+self.blue_num,:])
-            observation[index+8:index+self.index_id] = distances[i+self.blue_num,:]/np.sqrt(self.WINDOW_SIZE_lat*self.WINDOW_SIZE_lat+self.WINDOW_SIZE_lon*self.WINDOW_SIZE_lon)
-        # observation[0:self.blue_num+self.red_num,obs_index_distance:obs_index_distance+(self.red_num+self.blue_num)] = distances[0:self.blue_num+self.red_num,0:self.blue_num+self.red_num]
-        self.temp = observation   
-            
-        # observation[self.ofs_num-2] = np.array(self.ng_area_lat)
-        # observation[self.ofs_num-1] = np.array(self.ng_area_lon)
-        # print(observation)
-        for i in range(self.blue_num):
-            obs['blue_' + str(i)] = observation.astype(np.float32)
+                        
+        obs = get_obs(self)
         return obs
 
     def step(self, action_dict):
@@ -154,9 +116,7 @@ class MyEnv(MultiAgentEnv):
         self.reward_fire = 0
         self.reward_missile_lost = 0
         # reward_ng = [0]*self.blue_num
-        observation = np.zeros(self.observation_space.shape)
-        ops = np.zeros(self.observation_space.shape)
-        obs_index_distance = (self.observation_space.shape[0]-(self.red_num+self.blue_num))*0+5
+
         position = np.zeros([self.blue_num+self.red_num,2])
     
         is_touch = False
@@ -182,7 +142,6 @@ class MyEnv(MultiAgentEnv):
             if self.mrm[i].missile_tgt_lost:
                 self.reward_missile_lost = self.reward_missile_lost + 1
                 self.mrm[i].missile_tgt_lost = False
-                # print(self.reward_missile_lost)
                 
             if np.linalg.norm(self.mrm[i].tgt.pos - self.mrm[i].pos) < self.mrm[i].destruction_range:
                 self.mrm[i].tgt.hitpoint = 0
@@ -203,7 +162,6 @@ class MyEnv(MultiAgentEnv):
                     self.mrm_num = self.mrm_num + 1
                 
         for i in range(self.red_num):
-            # print(self.red[i].detect_launch)
             #発射判定 uavクラスのステータス更新部分に移行予定
             if self.red[i].tgt_inrange():
                 if self.red[i].can_launch():
@@ -216,7 +174,7 @@ class MyEnv(MultiAgentEnv):
                 self.blue[j].MAWS_ML(self.mrm[i])
             for j in range(self.red_num):
                 self.red[j].MAWS(self.mrm[i])
-        print(action_dict)
+
         for i in range(self.blue_num):
             if not self.blue[i].hitpoint == 0:
                 action_index = action_dict['blue_' + str(i)]
@@ -235,62 +193,8 @@ class MyEnv(MultiAgentEnv):
             for j in range(self.blue_num):
                 self.red[i].tgt_update(self.blue[j])
         
-        for i in range(self.blue_num):
-            # 状態の作成
-            index = i*self.index_id
-            position[i] = self.blue[i].pos
-            
-            observation[index] = self.blue[i].hitpoint        
-            observation[index+1] = self.blue[i].mrm_num
-            if self.blue[i].inrange:
-                observation[index+2] = 0
-            else:
-                observation[index+2] = 1
-            if self.blue[i].detect_launch_ML:
-                observation[index+3] = 0
-            else:
-                observation[index+3] = 1
-            # observation[index+4] = self.blue[i].aa
-            observation[index+4] = np.cos(self.blue[i].ops_az())
-            observation[index+5] = np.sin(self.blue[i].ops_az())
-            observation[index+6:index+8] = position[i]/(np.array([self.WINDOW_SIZE_lat,self.WINDOW_SIZE_lon]))
-                
-        for i in range(self.red_num):
-            # 状態の作成
-            index = (i+self.blue_num)*self.index_id
-            position[i+self.blue_num] = self.red[i].pos
-            # observation[index:index+2] = position[i+self.blue_num]
-            observation[index] = self.red[i].hitpoint
-            observation[index+1] = self.red[i].mrm_num
-            if self.red[i].inrange:
-                observation[index+2] = 0
-            else:
-                observation[index+2] = 1
-            if self.red[i].detect_launch:
-                observation[index+3] = 0
-            else:
-                observation[index+3] = 1
-            # observation[index+4] = self.red[i].aa
-            observation[index+4] = np.cos(self.red[i].ops_az())
-            observation[index+5] = np.sin(self.red[i].ops_az())
-            observation[index+6:index+8] = position[i]/(np.array([self.WINDOW_SIZE_lat,self.WINDOW_SIZE_lon]))
-        
-        for i in range(self.blue_num):
-            if not self.blue[i].hitpoint == 0:
-                obs['blue_' + str(i)] = observation.astype(np.float32)
-            
-        distances = self.distances_calc(position)
-        angles = self.angles_calc(position)
-        
-        for i in range(self.blue_num):
-            index = i*self.index_id
-            # observation[index+5:index+self.index_id] = np.append(distances[i,:]/np.sqrt(self.WINDOW_SIZE_lat*self.WINDOW_SIZE_lat+self.WINDOW_SIZE_lon*self.WINDOW_SIZE_lon),angles[i,:])
-            observation[index+8:index+self.index_id] = distances[i,:]/np.sqrt(self.WINDOW_SIZE_lat*self.WINDOW_SIZE_lat+self.WINDOW_SIZE_lon*self.WINDOW_SIZE_lon)
-        
-        for i in range(self.red_num):
-            index = (i+self.blue_num)*self.index_id
-            observation[index+8:index+self.index_id] = distances[i+self.blue_num,:]/np.sqrt(self.WINDOW_SIZE_lat*self.WINDOW_SIZE_lat+self.WINDOW_SIZE_lon*self.WINDOW_SIZE_lon)
-        
+        obs = get_obs(self)    
+
         for i in range(self.blue_num):
             if self.blue[i].inrange:
                 reward_inrange = reward_inrange + 1
@@ -355,10 +259,17 @@ class MyEnv(MultiAgentEnv):
                 rewards['blue_' + str(i)] = reward
             
         for i in range(self.blue_num):
+            if self.blue[i].hitpoint == 0 or dones['__all__']:
+                dones['blue_' + str(i)] = False
+            else:
+                dones['blue_' + str(i)] = False
+                
+        # info
+        for i in range(self.blue_num):
             if self.blue[i].hitpoint == 0:
-                dones['blue_' + str(i)] = True
+                infos['blue_' + str(i)] = {}
         self.render()
-        return obs, rewards, dones, {}
+        return obs, rewards, dones, infos
     
     
     def render(self):

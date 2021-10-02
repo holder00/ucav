@@ -14,7 +14,7 @@ observations = env.reset()
 #                                      env.action_space.n,
 #                                      {}, 'my_model')
 
-while False:
+while True:
     action_dict = {}
     for i in range(env.blue_num):
         action_dict['blue_' + str(i)] = env.action_space.sample()
@@ -26,12 +26,12 @@ while False:
     # print(f'red_force: {env.red.force}')
     # np.set_printoptions(precision=1)
     # print(f'blue_force: {env.blue.force}')
-    print(f'dones: {dones}')
-    np.set_printoptions(precision=3)
-    print(f'observations:{observations}')
-    np.set_printoptions(precision=3)
-    print(f'rewards: {rewards}')
-    print(f'infos: {infos}')
+    # print(f'dones: {dones}')
+    # np.set_printoptions(precision=3)
+    # print(f'observations:{observations}')
+    # np.set_printoptions(precision=3)
+    # print(f'rewards: {rewards}')
+    # print(f'infos: {infos}')
 
     # env.render()
 

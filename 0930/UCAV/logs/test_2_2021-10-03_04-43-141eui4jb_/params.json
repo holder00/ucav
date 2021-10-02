@@ -1,0 +1,6 @@
+{
+  "env": "<class 'environment_rllib.MyEnv'>",
+  "num_cpus_per_worker": 0,
+  "num_gpus": 0,
+  "num_workers": 1
+}
