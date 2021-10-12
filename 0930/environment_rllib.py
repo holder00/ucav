@@ -62,14 +62,20 @@ class MyEnv(MultiAgentEnv):
 
         # 状態の範囲を定義
         self.ofs_num = self.red_num + self.blue_num
+        self_status_low = np.array([0,0,0,0,-1,-1,-1, 0])
+        self_status_high = np.array([1,4,1,1, 1, 1, 2, 1])
+        team_action_low = np.array([-1,-1,-1])
+        team_action_high = np.array([self.red_num,1,1])
+        obs_low = np.append(self_status_low, team_action_low)
+        obs_high = np.append(self_status_high, team_action_high)
         #                         0:hit, 1:mrm, 2:inrange, 3:detect, 4:opscos, 5:opssin, 6:posx, 7:posy, 8~each_distances
-        LOW = np.tile(np.append( [0,0,0,0,-1,-1,-1, 0], [0]*(self.blue_num+self.red_num)),(self.ofs_num,1))   #被射撃、HP、距離
-        HIGH = np.tile(np.append([1,2,1,1, 1, 1, 2, 1], [2]*(self.blue_num+self.red_num)),(self.ofs_num,1))
+        LOW = np.tile(np.append( obs_low, [0]*(self.blue_num+self.red_num)),(self.ofs_num,1))   #被射撃、HP、距離
+        HIGH = np.tile(np.append(obs_high, [2]*(self.blue_num+self.red_num)),(self.ofs_num,1))
         # LOW = np.tile(np.append([0,0,0,0,-1,-1,0,0], [0]*(self.blue_num+self.red_num)),(self.blue_num,1))   #被射撃、HP、距離
         # HIGH = np.tile(np.append([1,2,1,1,1,1,2,1],[2]*(self.blue_num+self.red_num)),(self.blue_num,1))
         self.observation_space = gym.spaces.Box(low=LOW, high=HIGH,shape=HIGH.shape)
         
-        
+        self.action_dict_c = {}
         obs = self.reset()
 
 
@@ -80,14 +86,16 @@ class MyEnv(MultiAgentEnv):
         self.before_distance = np.zeros(self.blue_num)
         self.mrm = [0]*(self.blue_num*self.blue[0].mrm_num + self.red_num*self.red[0].mrm_num)
         self.mrm_num = 0
-
+        self.timer = 0
         self.reward_k = 0
         self.reward_d = 0
         self.reward_missile_lost = 0
         self.reward_fire = 0
         self.reward_win = 0
+        self.rewards_total = {}
         self.reward_total = 0
-        
+        for i in range(self.blue_num):
+            self.rewards_total['blue_' + str(i)] = 0
         self.index_id = int(self.observation_space.shape[1]/(self.blue_num+self.red_num))
         for i in range(self.blue_num):
             self.blue[i] = uav(self.WINDOW_SIZE_lat-self.blue_side, self.WINDOW_SIZE_lon, self.blue_safe_area,"blue",i,0)
@@ -99,13 +107,17 @@ class MyEnv(MultiAgentEnv):
             for j in range(self.red_num):
                 self.blue[i].tgt_update(self.red[j])
                 self.red[j].tgt_update(self.blue[i])
-                        
+        for i in range(self.blue_num):
+            self.action_dict_c['blue_' + str(i)] = self.action_space.sample()
         obs = get_obs(self)
         return obs
 
     def step(self, action_dict):
         obs, rewards, dones, infos = {}, {}, {}, {}
-
+        rewards_fire = {}
+        rewards_inrage = {}
+        rewards_inraged = {}
+        self.timer = self.timer + self.sim_dt 
         distance_temp = [0]*self.blue_num
         reward_temp = [0]*self.blue_num
         reward_fw_blue = [0]*self.blue_num
@@ -158,6 +170,7 @@ class MyEnv(MultiAgentEnv):
             if self.blue[i].tgt_inrange():
                 if self.blue[i].can_launch_ML():
                     self.mrm[self.mrm_num] = missile(self.blue[i])
+                    rewards_fire['blue_' + str(i)] = 1
                     self.reward_fire = self.reward_fire + 1
                     self.mrm_num = self.mrm_num + 1
                 
@@ -193,14 +206,21 @@ class MyEnv(MultiAgentEnv):
             for j in range(self.blue_num):
                 self.red[i].tgt_update(self.blue[j])
         
+        self.action_dict_c = action_dict
         obs = get_obs(self)    
 
         for i in range(self.blue_num):
+            rewards_inrage['blue_' + str(i)] = 0
+            rewards_inraged['blue_' + str(i)] = 0
             if self.blue[i].inrange:
-                reward_inrange = reward_inrange + 1
+                rewards_inrage['blue_' + str(i)] = 1
+                
+                # reward_inrange = reward_inrange + 1
         for i in range(self.red_num):
             if self.red[i].inrange:
-                reward_inrange = reward_inrange - 1.5
+                rewards_inraged['blue_' + str(self.red[i].tgt.id)] =\
+                    rewards_inraged['blue_' + str(self.red[i].tgt.id)] -1.5
+                # reward_inrange = reward_inrange - 1.5
                 
         tgt_id = np.zeros(4)
         for i in range(self.blue_num):
@@ -214,6 +234,7 @@ class MyEnv(MultiAgentEnv):
                 is_touch = False
             if self.red[i].pos[0] > self.blue_safe_area[0]:
                 is_red_reach = True
+                is_red_reach = False
             # if self.blue[i].pos[0] < self.red_safe_area[1]:
                 # is_blue_reach = True
                 # is_reach = False
@@ -226,15 +247,18 @@ class MyEnv(MultiAgentEnv):
                     is_fin = False
                 else:
                     is_fin = True
-            if self.reward_d == self.blue_num:
-                is_fin = True
+        #if self.reward_d == 0
+        if self.reward_d == self.blue_num:
+            is_fin = True
+                
+        
         if is_touch or is_red_reach or is_blue_reach or is_fin or self.timer >= self.time_limit:
             dones['__all__'] = True
-            self.timer = 0
+            
             if (not is_red_reach and not self.reward_d == self.blue_num and self.reward_k == self.red_num) or is_blue_reach:
                 self.reward_win = 1
             elif is_red_reach or self.reward_d == self.blue_num  or self.timer >= self.time_limit:
-                self.reward_win = -4 + 0.5*self.reward_k
+                self.reward_win = -1 + 0.0*self.reward_k
         self.center_line = (np.min(reward_fw_blue) + np.max(reward_fw_red))/2
     
         self.blue_line = np.average(reward_fw_blue)
@@ -246,21 +270,35 @@ class MyEnv(MultiAgentEnv):
     
         #報酬は事象と状況によって区別すべき、事象は発生した一瞬に対して報酬が変化、状況は継続的に報酬が変化
         #状況は今後の行動で好転させることができるが、事象は今後の行動で好転させることができない
-        #ex)撃墜された”事象”＝発生した瞬間マイナス、しかし今後の行動で好転させることができない　前線が押されている”状況”＝現在はマイナス継続するとマイナス、しかし今後の行動で打開できる
+        #ex)撃墜された”事象”＝発生した瞬間マイナス、しかし今後の行動で好転させることができない
+        #前線が押されている”状況”＝現在はマイナス継続するとマイナス、しかし今後の行動で打開できる
     
-        reward_temp = 0.0001*reward_inrange -reward_tgt*0 - 0*self.reward_fire -0.0001*np.sum(reward_ng) + 0.0*reward_k_temp + self.reward_win
+        # reward_temp = 0.0001*reward_inrange -reward_tgt*0 - 0*self.reward_fire\
+        #     -0.0001*np.sum(reward_ng) + 0.0*reward_k_temp + self.reward_win
+        reward_temp = self.reward_win + 0.5*reward_k_temp
         reward = reward_temp
         
         self.reward_total = self.reward_total + reward 
-        self.timer = self.timer + self.sim_dt 
-        self.reward_num = reward
+        
+        
         for i in range(self.blue_num):
-            if not self.blue[i].hitpoint == 0:
-                rewards['blue_' + str(i)] = reward
-            
+            rewards['blue_' + str(i)] = reward 
+            if not self.blue[i].hitpoint == 0 or dones['__all__']:
+                if 'blue_' + str(i) in rewards_fire:
+                    rewards['blue_' + str(i)] = rewards['blue_' + str(i)] - 0.025*rewards_fire['blue_' + str(i)]
+                if 'blue_' + str(i) in rewards_inrage:
+                    rewards['blue_' + str(i)] = rewards['blue_' + str(i)] + 0.0001*rewards_inrage['blue_' + str(i)]
+                if 'blue_' + str(i) in rewards_inraged:
+                    rewards['blue_' + str(i)] = rewards['blue_' + str(i)] + 0.0001*rewards_inraged['blue_' + str(i)]
+                # if 'blue_' + str(i) in rewards_kill:
+                #     rewards['blue_' + str(i)] = rewards['blue_' + str(i)] - 0.05*rewards_kill['blue_' + str(i)]
+            self.rewards_total['blue_' + str(i)] = self.rewards_total['blue_' + str(i)] + rewards['blue_' + str(i)]
+        self.reward_num = rewards
+        
         for i in range(self.blue_num):
-            if self.blue[i].hitpoint == 0 or dones['__all__']:
-                dones['blue_' + str(i)] = False
+            # if self.blue[i].hitpoint == 0 or dones['__all__']:
+            if dones['__all__']:
+                dones['blue_' + str(i)] = True
             else:
                 dones['blue_' + str(i)] = False
                 
@@ -268,7 +306,7 @@ class MyEnv(MultiAgentEnv):
         for i in range(self.blue_num):
             if self.blue[i].hitpoint == 0:
                 infos['blue_' + str(i)] = {}
-        self.render()
+        # self.render()
         return obs, rewards, dones, infos
     
     
@@ -293,20 +331,67 @@ class MyEnv(MultiAgentEnv):
         
         cv2.rectangle(img,(self.WINDOW_SIZE_lat,0),(self.WINDOW_SIZE_lat-self.red_side, self.WINDOW_SIZE_lon),(255,0,0),3)
         
-        cv2.putText(img, format(self.timer, '.1f'), (self.WINDOW_SIZE_lat-500, self.WINDOW_SIZE_lon-10), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), thickness=2)
-        cv2.putText(img, format(self.reward_num, '.3f'), (self.WINDOW_SIZE_lat-500, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), thickness=2)
-        cv2.putText(img, format(self.reward_total, '.3f'), (self.WINDOW_SIZE_lat-700, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), thickness=2)
+        cv2.putText(img, format(self.timer, '.1f'), (self.WINDOW_SIZE_lat-500, self.WINDOW_SIZE_lon-10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), thickness=2)
+        txt_pos = 0
+        for i in range(self.blue_num):
+            if 'blue_' + str(i) in self.reward_num:
+                txt_pos = txt_pos + 1
+                cv2.putText(img, 'blue_' + str(i) + ':  ' +format(self.reward_num['blue_' + str(i)], '.3f'),
+                            (self.WINDOW_SIZE_lat-500, 50*txt_pos),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), thickness=2)
+                cv2.putText(img, 'blue_' + str(i) + ':  ' +format(self.rewards_total['blue_' + str(i)], '.3f'),
+                            (self.WINDOW_SIZE_lat-800, 50*txt_pos),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), thickness=2)
+                # cv2.putText(img, format(self.reward_total, '.3f'), (self.WINDOW_SIZE_lat-700, 50),
+                #             cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), thickness=2)
         cv2.imshow('image', img)
         cv2.waitKey(1)
+        
+    def render_movie(self,file_name,step_num):
+                # opencvで描画処理
+        img = np.zeros((self.WINDOW_SIZE_lon, self.WINDOW_SIZE_lat, 3)) #画面初期化
+        step_num = str(step_num)
+        img.astype(np.float32)
+        for i in range(self.blue_num):
+            self.render_craft(img,self.blue[i])
+            self.render_radar(img,self.blue[i])
+            self.tgt_lines(img,self.blue[i])
+        
+        for i in range(self.red_num):
+            self.render_craft(img,self.red[i])
+            # self.tgt_lines(img,self.red[i])
+        for i in range(self.mrm_num):
+            self.render_missile(img, self.mrm[i])
+            # self.tgt_lines(img,self.mrm[i])
+    
+        # cv2.rectangle(img,(int(self.center_line),0),(int(self.center_line), self.WINDOW_SIZE_lon),(255,0,255),3)
+        # cv2.rectangle(img,(int(self.blue_line),0),(int(self.blue_line), self.WINDOW_SIZE_lon),(255,255,255),3)
+        cv2.rectangle(img,(0,0),(self.blue_side, self.WINDOW_SIZE_lon),(0,0,255),3)
+        
+        cv2.rectangle(img,(self.WINDOW_SIZE_lat,0),(self.WINDOW_SIZE_lat-self.red_side, self.WINDOW_SIZE_lon),(255,0,0),3)
+        
+        cv2.putText(img, format(self.timer, '.1f'), (self.WINDOW_SIZE_lat-500, self.WINDOW_SIZE_lon-10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), thickness=2)
+        cv2.putText(img, format(self.reward_num, '.3f'), (self.WINDOW_SIZE_lat-500, 50), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), thickness=2)
+        cv2.putText(img, format(self.reward_total, '.3f'), (self.WINDOW_SIZE_lat-700, 50), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), thickness=2)
+        cv2.imshow('image', img)
+        cv2.waitKey(1)
+        
+        return img
     
     def render_craft(self, img, temp):
         if temp.faction == "red":
-            # cv2.putText(img, format(temp.id, 'd'), (int(temp.pos[0]), int(temp.pos[1])), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), thickness=2)
+            # cv2.putText(img, format(temp.id, 'd'), (int(temp.pos[0]), int(temp.pos[1])),
+            #             cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), thickness=2)
             color_num = (0,0,255)
             # if temp.detect_launch:
             #     color_num = (255,255,255)
         elif temp.faction =="blue":
-            # cv2.putText(img, format(temp.id, 'd'), (int(temp.pos[0]), int(temp.pos[1])), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), thickness=2)
+            # cv2.putText(img, format(temp.id, 'd'), (int(temp.pos[0]), int(temp.pos[1])),
+            #             cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), thickness=2)
             color_num = (255,0,0)
             # if temp.detect_launch:
             #     color_num = (255,255,255)
@@ -344,7 +429,10 @@ class MyEnv(MultiAgentEnv):
             color_num = (255,0,0)
         else:
             color_num = (255,255,255)
-        cv2.ellipse(img, (int(temp.pos[0]), int(temp.pos[1])), (int(temp.radar_range+1), int(temp.radar_range+1)), -90-np.rad2deg(np.arctan2(temp.vec[0], temp.vec[1])), 180-np.rad2deg(temp.sensor_az), 180+np.rad2deg(temp.sensor_az), color_num)
+        cv2.ellipse(img, (int(temp.pos[0]), int(temp.pos[1])),
+                    (int(temp.radar_range+1), int(temp.radar_range+1)),
+                    -90-np.rad2deg(np.arctan2(temp.vec[0], temp.vec[1])),
+                    180-np.rad2deg(temp.sensor_az), 180+np.rad2deg(temp.sensor_az), color_num)
     
        
     def craft_missile(self, pos, vec):

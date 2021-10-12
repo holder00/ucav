@@ -30,6 +30,12 @@ class missile(uav):
         self.thrust_dt = 0.001
         self.sensor_az = np.deg2rad(60)
         self.radar_range = 500
+        if self.parent.faction == "blue":
+            self.radar_range = self.parent.radar_range/4
+            self.Izz = 50
+        elif self.parent.faction == "red":
+            self.radar_range = self.parent.radar_range
+            self.Izz = 50
         
     def update_status(self, sim_dt):
         if self.hitpoint > 0:
@@ -44,10 +50,17 @@ class missile(uav):
             self.pos_update_ctrl(sim_dt)
             
     def guidance_law(self, sim_dt):
-        if self.tgt.hitpoint == 0 or not self.tgt_inrange():
-            self.com = np.array([0,0])
-        else:
+        if (self.parent.tgt_inrange() or self.tgt_inrange()) and not self.tgt.hitpoint == 0:
             self.com = self.vec_norm((self.tgt.pos - self.pos))
+        else:
+            self.com = np.array([0,0])
+        
+    def guidance_law_ARH(self, sim_dt):
+        if self.tgt_inrange() and not self.tgt.hitpoint == 0:
+            self.com = self.vec_norm((self.tgt.pos - self.pos))
+        else:
+            self.com = np.array([0,0])
+            
     # def pos_update_ctrl(self, sim_dt, tgt):
     #     if self.hitpoint > 0:
     #         self.hitpoint = self.hitpoint - 1

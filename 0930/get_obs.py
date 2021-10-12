@@ -21,7 +21,13 @@ def get_state(env,uav,position,distances):
     uav_state[4] = np.cos(uav.ops_az())
     uav_state[5] = np.sin(uav.ops_az())
     uav_state[6:8] = position/(np.array([env.WINDOW_SIZE_lat,env.WINDOW_SIZE_lon]))   
-    uav_state[8:] = distances/(env.WINDOW_SIZE_lat*3)
+    
+    if uav.faction == "blue" and not uav.hitpoint == 0:
+        uav_state[8:8+env.action_space.shape[0]] = env.action_dict_c['blue_' + str(uav.id)]
+    else:
+        uav_state[8:8+env.action_space.shape[0]] = -np.ones(env.action_space.shape[0])
+        
+    uav_state[8+env.action_space.shape[0]:] = distances/(env.WINDOW_SIZE_lat*3)
 
     return uav_state
 
@@ -38,12 +44,14 @@ def get_obs(env):
     
     for i in range(env.blue_num):
         # 状態の作成  
-        observation[i,:] = get_state(env,env.blue[i],position[i],distances[i])
+        if not env.blue[i].hitpoint == 0:            
+            observation[i,:] = get_state(env,env.blue[i],position[i],distances[i])
 
   
     for i in range(env.red_num):
         # 状態の作成
-        observation[i+env.blue_num,:] = get_state(env,env.red[i],position[i+env.blue_num],distances[i+env.blue_num])
+        if not env.red[i].hitpoint == 0:   
+            observation[i+env.blue_num,:] = get_state(env,env.red[i],position[i+env.blue_num],distances[i+env.blue_num])
     
     for i in range(env.blue_num):
         obs['blue_' + str(i)] = np.vstack([observation[i,:],np.delete(observation,i,0)]).astype(np.float32)

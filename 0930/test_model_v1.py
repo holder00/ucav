@@ -33,7 +33,7 @@ while True:
     # print(f'rewards: {rewards}')
     # print(f'infos: {infos}')
 
-    # env.render()
+    env.render()
 
     # エピソードの終了処理
     if dones['__all__']:

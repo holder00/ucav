@@ -19,11 +19,13 @@ class uav:
             self.az = np.deg2rad(180)
             self.Izz = 50
             self.thrust = 1
+            self.mrm_num = 2
         elif self.faction == "red":
             # self.vec = np.array([1,0])
             self.az = np.deg2rad(0)
             self.Izz = 25*2
             self.thrust = 1
+            self.mrm_num = 4
         self.ref_aa = 0
         self.aa = 0
         self.com = np.array([0,0])
@@ -36,7 +38,7 @@ class uav:
         self.detect_launch = False
         self.detect_launch_ML = False
         self.inrange = False
-        self.mrm_num = 2
+        
         self.vel_limit = 15
         self.vec = self.az2vec(self.az)
         self.hitpoint = 1.0
