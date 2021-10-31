@@ -1,0 +1,12 @@
+{
+  "env": "<class 'battle_field_strategy_2D_v0.BattleFieldStrategy'>",
+  "gamma": 0.99,
+  "lr": 5e-05,
+  "model": {
+    "custom_model": "my_model"
+  },
+  "num_cpus_per_worker": 0,
+  "num_gpus": 0,
+  "num_sgd_iter": 10,
+  "num_workers": 22
+}

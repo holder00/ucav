@@ -1,0 +1,41 @@
+{
+  "training": {
+    "name": "battle_field_strategy_2D_v0",
+    "algorithm": "ppo",
+    "trial": "fwd_2",
+    "eval_freq": 25,
+    "num_eval": 1,
+    "num_workers": 1,
+    "num_gpus": 0,
+    "num_cpus_per_worker": 0,
+    "num_sgd_iter": 10,
+    "learning_rate": 5e-05,
+    "gamma": 0.99
+  },
+  "test": {
+    "num_test": 1
+  },
+  "env_setting": {
+    "max_steps": 500,
+    "grid_size": 10,
+    "channel": 7,
+    "alive_criteria": 5.0,
+    "dt": 1,
+    "init_pos_range_ratio": 0.3,
+    "num_block_max": 10,
+    "num_red_max": 6,
+    "num_red_min": 6,
+    "num_blue_max": 7,
+    "num_blue_min": 7,
+    "red_total_force": 500,
+    "blue_total_rofce": 490,
+    "red_max_force": 500,
+    "blue_max_force": 490,
+    "red_min_force": 50,
+    "blue_min_force": 50,
+    "red_max_efficiency": 0.6,
+    "blue_max_efficiency": 0.6,
+    "red_min_efficiency": 0.6,
+    "blue_min_efficiency": 0.6
+  }
+}
