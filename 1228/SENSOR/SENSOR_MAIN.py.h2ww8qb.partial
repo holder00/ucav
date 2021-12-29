@@ -1,0 +1,214 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# # センサクラス
+# #### masu 2021.9
+
+# In[2]:
+
+
+import sys
+sys.path.append("../")
+sys.path.append("../utility")
+sys.path.append("../uav")
+
+from uav import uav
+import copy
+
+#座標系クラスのインポート
+from COORDINATION_SYSTEMS import ECEF, LLA, NED, FRD, AC_ATTITUDE, LOCAL, SENSOR_ATTITUDE, FOCAL_POSITION, FOCAL_ANGLE
+#WGS84座標変換クラスのインポート
+from WGS84_COORDINATE_CONVERT import WGS84_COORDINATION_CONVERT
+#座標変換クラスのインポート
+from ATTITUDE_CONVERT import ATTITUDE_CONVERT
+#センサ取得情報クラスのインポート
+from SENSOR_FOCAL import SENSOR_FOCAL
+#センサ性能クラスのインポート
+from SENSOR_PERFORMANCE import FOV
+#センサモデルクラスのインポート
+from SENSOR_MODEL import SENSOR_RECOGNITION
+
+from RADAR_TOY_MODEL import RADAR_TOY_MODEL        #レーダー　トイモデル
+
+
+# In[3]:
+
+
+class sensor:
+    ### コンストラクタ
+    ###　入力：blue
+    ###　入力：red
+    def __init__(self,blue,red):
+        nBNum = len(blue)
+        nRNum = len(red)
+        nSize = len(blue) * len(red)
+        
+        #blue側のオブジェクト生成
+        self.b_radar = [RADAR_TOY_MODEL()] * nSize
+        for i in range(nSize):
+            self.b_radar[i] = RADAR_TOY_MODEL()
+            #print("detected",self.b_radar[i].detected)
+        
+        #red側のオブジェクト生成
+        self.r_radar = [RADAR_TOY_MODEL()] * nSize
+        for i in range(nSize):
+            self.r_radar[i] =RADAR_TOY_MODEL()
+
+        #blue,red情報の実体コピー
+        self.s_blue = copy.deepcopy(blue)
+        self.s_red = copy.deepcopy(red)
+
+        #センサ性能情報保持用
+        self.b_fov = FOV(0,0,nBNum,'./sensor/sensor_blue.csv')
+        self.r_fov = FOV(0,0,nRNum,'./sensor/sensor_red.csv')
+        
+        #個別FOV設定サンプル
+        #self.b_fov.SetFov(1,10,15)
+        #fov_val = self.b_fov.GetFov(1)
+        #print("az_",fov_val[0],"el_",fov_val[1])
+        
+        print(">>sub-start")
+        #相手機:red→blue算出
+        for i in range(nBNum):
+            #自機
+            opp_lla =LLA(self.s_blue[i].lat,self.s_blue[i].lon,0)
+            opp_att =AC_ATTITUDE(10,10,10)
+            for n in range(nRNum):
+                #相手機:red
+                own_lla = LLA(self.s_red[n].lat,self.s_red[n].lon,0)
+                own_att = AC_ATTITUDE(0,0,0)
+                
+                fov_val = self.b_fov.GetFov(n)
+                sens_att =SENSOR_ATTITUDE(0,fov_val[1],fov_val[0]) #スピン,El,Az
+                print("fov_val",fov_val)
+                
+                sensor_range = self.b_fov.GetRange(n)
+                print("sensor_range",sensor_range)
+                
+                fov = FOCAL_ANGLE(0,0)
+                sensor_range_effected = 0
+                sensor_fov = 0
+                self.r_radar[i * nBNum + n].get_rf_detection_level(own_lla, own_att,sens_att, opp_lla, opp_att,sensor_range,fov)
+                #self.r_radar[i * nBNum + n].get_recognition_level(own_lla, own_att,sens_att,opp_lla,sensor_fov, sensor_range_effected)
+        
+        #相手機:blue→red算出
+        for i in range(nRNum):
+            #自機
+            opp_lla =LLA(self.s_red[i].lat,self.s_red[i].lon,0)
+            opp_att =AC_ATTITUDE(10,10,10)
+            for n in range(nBNum):
+                #相手機:red
+                own_lla = LLA(self.s_blue[n].lat,self.s_blue[n].lon,0)
+                own_att = AC_ATTITUDE(0,0,0)
+                
+                fov_val = self.r_fov.GetFov(n)
+                print("fov_val",fov_val)
+                sens_att =SENSOR_ATTITUDE(0,fov_val[1],fov_val[0]) #スピン,El,Az
+                sensor_range = self.r_fov.GetRange(n)
+                print("sensor_range",sensor_range)
+
+                fov = FOCAL_ANGLE(0,0)
+                sensor_range_effected = 0
+                sensor_fov = 0
+                
+                self.b_radar[i * nRNum + n].get_rf_detection_level(own_lla, own_att,sens_att, opp_lla, opp_att,sensor_range,fov)
+                #self.b_radar[i * nRNum + n].get_recognition_level(own_lla, own_att,sens_att,
+                #                                                  opp_lla,sensor_fov, sensor_range_effected)
+        
+        
+        for i in range(nSize):
+            print("r-detect",self.r_radar[i].detected,"b-detect",self.b_radar[i].detected)
+        
+        
+    ### blue,red情報更新
+    ###　入力：blue
+    ###　入力：red
+    def update(self,blue,red):
+        #具体的な処理は、決まってない
+        #枠ぐみのみ作成。
+                
+        
+        print("old_blue:",self.s_blue[0].lat,"in", blue[0].lat)
+        #print("old_blue:",self.blue[1].lat,self.blue[1].lon)
+        #print("old_red:",self.red[0].lat,self.red[0].lon)
+        #print("old_red:",self.red[1].lat,self.red[1].lon)
+
+        self.s_blue = [0] * len(blue)
+        self.s_red = [0] * len(red)
+        self.s_blue = copy.deepcopy(blue)
+        self.s_red = copy.deepcopy(red)
+
+        #更新処理
+        #相手機:red→blue算出
+        nBNum = len(blue)
+        nRNum = len(red)
+        for i in range(nBNum):
+            #自機
+            opp_lla =LLA(self.s_blue[i].lat,self.s_blue[i].lon,0)
+            opp_att =AC_ATTITUDE(10,10,10)
+            for n in range(nRNum):
+                #相手機:red
+                own_lla = LLA(self.s_red[n].lat,self.s_red[n].lon,0)
+                own_att = AC_ATTITUDE(0,0,0)
+                
+                fov_val = self.b_fov.GetFov(n)
+                sens_att =SENSOR_ATTITUDE(0,fov_val[1],fov_val[0]) #スピン,El,Az
+                print("up:fov_val",fov_val)
+                
+                sensor_range = self.b_fov.GetRange(n)
+                print("up:sensor_range",sensor_range)
+                
+                fov = FOCAL_ANGLE(0,0)
+                sensor_range_effected = 0
+                sensor_fov = 0
+                self.r_radar[i * nBNum + n].get_rf_detection_level(own_lla, own_att,sens_att, opp_lla, opp_att,sensor_range,fov)
+
+        #相手機:blue→red算出
+        for i in range(nRNum):
+            #自機
+            opp_lla =LLA(self.s_red[i].lat,self.s_red[i].lon,0)
+            opp_att =AC_ATTITUDE(10,10,10)
+            for n in range(nBNum):
+                #相手機:red
+                own_lla = LLA(self.s_blue[n].lat,self.s_blue[n].lon,0)
+                own_att = AC_ATTITUDE(0,0,0)
+                
+                fov_val = self.r_fov.GetFov(n)
+                print("up:fov_val",fov_val)
+                sens_att =SENSOR_ATTITUDE(0,fov_val[1],fov_val[0]) #スピン,El,Az
+                sensor_range = self.r_fov.GetRange(n)
+                print("up:sensor_range",sensor_range)
+
+                fov = FOCAL_ANGLE(0,0)
+                sensor_range_effected = 0
+                sensor_fov = 0
+                
+                self.b_radar[i * nRNum + n].get_rf_detection_level(own_lla, own_att,sens_att, opp_lla, opp_att,sensor_range,fov)
+                
+        nSize = nBNum * nRNum
+        for i in range(nSize):
+            print("up:r-detect",self.r_radar[i].detected,"up:b-detect",self.b_radar[i].detected)
+                
+        
+        #ダミー値で確認
+        self.s_blue[0].lat = 99
+        self.s_red[0].lat = 99
+                
+        print("update")
+        
+        #print("b-pos:",self.blue[0].pos)
+        #print("lat_lon:",self.blue[0].lat,self.blue[0].lon)
+        #print("lat_lon:",self.blue[1].lat,self.blue[1].lon)
+
+        #print("r-pos:",self.red[0].pos)
+        #print("lat_lon:",self.red[0].lat,self.red[0].lon)
+        #print("lat_lon:",self.red[1].lat,self.red[1].lon)
+ 
+        return self.s_blue,self.s_red
+
+
+# In[ ]:
+
+
+
+
