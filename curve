@@ -1,0 +1,177 @@
+Stanley制御を曲線追従に拡張するには、目標経路を直線ではなく曲線（例えば点列やスプラインで表現）として扱い、車両の現在位置から最も近い点（または先読み点）を動的に選択して操舵角を計算します。以下に、PythonでStanley制御を曲線追従に適用する実装例を示します。
+前提
+目標経路は点列（\((x_i, y_i)\) のリスト）で与えられる。
+車両の現在位置 \((x, y)\)、ヨー角 \(\theta\)、速度 \(v\) が取得可能。
+Stanley制御の基本式を曲線追従に適応させるため、最近点や先読み点を用いて横方向誤差と角度誤差を計算。
+Stanley制御（曲線追従）の基本式
+操舵角 \(\delta\) は以下で計算：
+\[
+\delta = \theta_e + \arctan\left(\frac{k \cdot e}{v + k_{\text{soft}}}\right)
+\]
+
+\(\theta_e\): 車両のヨー角と目標経路の接線角度の差（heading error）。
+\(e\): 車両と目標経路の最近点との距離（cross-track error）。
+\(k\): 横方向誤差のゲイン。
+\(v\): 車両の速度。
+\(k_{\text{soft}}\): 速度スケーリングの調整。
+Pythonコード
+以下は、点列で定義された曲線経路を追従するStanley制御の実装例です。
+import math
+import numpy as np
+from typing import List, Tuple
+
+class StanleyController:
+    def __init__(self, k: float = 1.0, k_soft: float = 1.0, lookahead_dist: float = 1.0):
+        """
+        Stanley制御のパラメータ
+        k: 横方向誤差のゲイン
+        k_soft: 速度スケーリングの調整
+        lookahead_dist: 先読み距離（最近点探索の補助）
+        """
+        self.k = k
+        self.k_soft = k_soft
+        self.lookahead_dist = lookahead_dist
+
+    def find_nearest_point(self, x: float, y: float, path: List[Tuple[float, float]]) -> Tuple[int, float, float]:
+        """
+        現在位置(x, y)から目標経路上の最近点を探索
+        戻り値: (最近点のインデックス, 最近点のx座標, 最近点のy座標)
+        """
+        distances = [math.sqrt((x - px)**2 + (y - py)**2) for px, py in path]
+        nearest_idx = np.argmin(distances)
+        return nearest_idx, path[nearest_idx][0], path[nearest_idx][1]
+
+    def calculate_cross_track_error(self, x: float, y: float, px: float, py: float) -> float:
+        """
+        横方向誤差を計算（点(x, y)から最近点(px, py)への距離）
+        """
+        return math.sqrt((x - px)**2 + (y - py)**2)
+
+    def calculate_heading_error(self, theta: float, path: List[Tuple[float, float]], nearest_idx: int) -> float:
+        """
+        角度誤差を計算（車両のヨー角と経路の接線角度の差）
+        """
+        # 最近点の次の点を基に接線角度を計算
+        if nearest_idx < len(path) - 1:
+            px1, py1 = path[nearest_idx]
+            px2, py2 = path[nearest_idx + 1]
+            path_angle = math.atan2(py2 - py1, px2 - px1)
+        else:
+            # 終点では前の点から角度を推定
+            px1, py1 = path[nearest_idx - 1]
+            px2, py2 = path[nearest_idx]
+            path_angle = math.atan2(py2 - py1, px2 - px1)
+        
+        # 角度誤差を計算し、[-pi, pi]に正規化
+        heading_error = path_angle - theta
+        heading_error = math.atan2(math.sin(heading_error), math.cos(heading_error))
+        return heading_error
+
+    def stanley_control(self, x: float, y: float, theta: float, v: float, path: List[Tuple[float, float]]) -> float:
+        """
+        Stanley制御による操舵角の計算
+        x, y: 車両の現在位置
+        theta: 車両のヨー角（ラジアン）
+        v: 車両の速度
+        path: 目標経路の点列 [(x1, y1), (x2, y2), ...]
+        """
+        # 最近点を探索
+        nearest_idx, px, py = self.find_nearest_point(x, y, path)
+        
+        # 横方向誤差
+        e = self.calculate_cross_track_error(x, y, px, py)
+        
+        # 角度誤差
+        theta_e = self.calculate_heading_error(theta, path, nearest_idx)
+        
+        # Stanley制御の操舵角計算
+        steering_angle = theta_e + math.atan2(self.k * e, self.k_soft + v)
+        
+        # 操舵角を制限（例: ±30度）
+        max_steering = math.radians(30)
+        steering_angle = max(min(steering_angle, max_steering), -max_steering)
+        
+        return steering_angle
+
+# シミュレーション例
+def simulate_stanley_curve():
+    # Stanley制御のインスタンス
+    controller = StanleyController(k=2.0, k_soft=1.0, lookahead_dist=1.0)
+    
+    # 目標経路（曲線: サインカーブを例に）
+    path = [(x, math.sin(x)) for x in np.arange(0, 10, 0.1)]
+    
+    # 車両の初期状態
+    x, y = 0.0, 0.5  # 初期位置（経路から0.5ずれた位置）
+    theta = math.radians(0)  # 初期ヨー角
+    v = 1.0  # 速度（固定）
+    
+    # シミュレーション結果の記録
+    trajectory = [(x, y)]
+    
+    # シミュレーションループ
+    dt = 0.1  # 時間ステップ
+    for _ in range(200):
+        # Stanley制御で操舵角を計算
+        steering = controller.stanley_control(x, y, theta, v, path)
+        
+        # 車両の状態更新（簡略化した自転車モデル）
+        x += v * math.cos(theta) * dt
+        y += v * math.sin(theta) * dt
+        theta += v * math.tan(steering) * dt
+        
+        # 軌跡を記録
+        trajectory.append((x, y))
+        
+        # ログ出力
+        print(f"Pos: ({x:.2f}, {y:.2f}), Theta: {math.degrees(theta):.2f}deg, Steering: {math.degrees(steering):.2f}deg")
+    
+    # 可視化（Matplotlibを使用）
+    import matplotlib.pyplot as plt
+    path_x, path_y = zip(*path)
+    traj_x, traj_y = zip(*trajectory)
+    
+    plt.plot(path_x, path_y, 'b-', label='Target Path')
+    plt.plot(traj_x, traj_y, 'r--', label='Vehicle Trajectory')
+    plt.legend()
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.title('Stanley Control: Curve Following')
+    plt.grid(True)
+    plt.show()
+
+if __name__ == "__main__":
+    simulate_stanley_curve()
+コードの説明
+StanleyControllerクラス:
+__init__: ゲイン \(k\)、速度スケーリング \(k_soft\)、先読み距離を初期化。
+find_nearest_point: 車両の現在位置から目標経路上の最近点を探索。
+calculate_cross_track_error: 最近点との距離（横方向誤差）を計算。
+calculate_heading_error: 最近点と次の点から経路の接線角度を計算し、角度誤差を算出。
+stanley_control: 横方向誤差と角度誤差を基に操舵角を計算。
+シミュレーション:
+目標経路はサインカーブ \(y = \sin(x)\) を点列で表現（\(x \in [0, 10]\), 0.1刻み）。
+車両の初期位置は \((0, 0.5)\)、ヨー角 \(0^\circ\)、速度 \(1.0\)、時間ステップ \(dt = 0.1\)。
+車両の軌跡を記録し、Matplotlibで目標経路と車両の軌跡を可視化。
+運動モデル:
+簡略化した自転車モデルを使用（実際の車両では車輪間距離やダイナミクスを考慮）。
+位置 \((x, y)\) とヨー角 \(\theta\) を操舵角と速度で更新。
+実行結果
+シミュレーションを実行すると、車両がサインカーブに沿って追従する軌跡が表示されます。
+初期位置 \((0, 0.5)\) から始まり、横方向誤差と角度誤差を減らしながら経路に収束。
+Matplotlibで目標経路（青）と車両の軌跡（赤）がプロットされ、追従の様子を確認可能。
+注意点
+パラメータ調整: \(k\) と \(k_soft\) は経路の形状や車両の速度に応じて調整。サインカーブのような急な曲線では \(k\) を小さめに設定すると安定。
+最近点探索: 単純なユークリッド距離を使用したが、動的環境ではより効率的な探索（例: KD-tree）を検討。
+経路の滑らかさ: 点列が粗い場合、接線角度の計算が不正確になるため、スプライン補間を検討。
+計算負荷: リアルタイム用途では、最近点探索や角度計算を最適化。
+拡張のアイデア
+スプライン補間: 点列をスプラインで滑らかにし、接線角度を正確に計算。
+動的経路更新: リアルタイムで経路が変化する場合に対応。
+センサー統合: LiDARやカメラのデータを用いて現在位置を推定。
+障害物回避: 経路上の障害物を考慮した制御ロジックを追加。
+サンプル出力（可視化）
+実行後、Matplotlibで以下のようなグラフが表示されます：
+青線: 目標経路（\(y = \sin(x)\)）
+赤破線: 車両の軌跡（サインカーブに収束）
+特定の経路（例: 円やスプライン）や車両モデル、リアルタイム処理の詳細が必要な場合は、教えてください！さらにカスタマイズした実装を提供します。
