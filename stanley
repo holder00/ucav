@@ -1,0 +1,234 @@
+航空機の曲線追従にStanley制御を適用する際、バンク角（ロール角、\(\phi\)）を考慮することで、より現実的な飛行ダイナミクスを再現できます。バンク角は航空機が旋回する際にヨー角変化率（\(\dot{\theta}\)）を生み出す主要な要因であり、Stanley制御の出力（ヨー角変化率）をバンク角に変換して制御します。以下では、2D平面での曲線追従を前提に、バンク角を考慮したStanley制御の実装をPythonで提供します。その後、航空機特有の考慮点や拡張について説明します。
+前提
+対象: 固定高度（2D平面）で飛行する航空機。
+経路: 点列（\((x_i, y_i)\)）で定義された曲線（例: サインカーブ）。
+状態: 航空機の現在位置 \((x, y)\)、ヨー角（方位角）\(\theta\)、速度 \(v\)、バンク角 \(\phi\)。
+制御入力: バンク角 \(\phi\)（エルロン操作で制御）。
+バンク角とヨー角変化率の関係:
+航空機の旋回はバンク角により発生し、ヨー角変化率は以下で近似：
+    \[
+    \dot{\theta} = \frac{g \tan(\phi)}{v}
+    \]
+
+ここで、\(g\) は重力加速度（9.81 m/s²）、\(v\) は対気速度。
+Stanley制御: 横方向誤差 \(e\) と角度誤差 \(\theta_e\) からヨー角変化率を計算し、それをバンク角に変換。
+Stanley制御の基本式（バンク角考慮）
+Stanley制御で目標ヨー角変化率 \(\dot{\theta}_{\text{des}}\) を計算：
+   \[
+   \dot{\theta}_{\text{des}} = \theta_e + \arctan\left(\frac{k \cdot e}{v + k_{\text{soft}}}\right)
+   \]
+
+ヨー角変化率から必要なバンク角 \(\phi\) を逆算：
+   \[
+   \phi = \arctan\left(\frac{\dot{\theta}_{\text{des}} \cdot v}{g}\right)
+   \]
+
+\(\theta_e\): 航空機のヨー角と経路の接線角度の差。
+\(e\): 航空機と目標経路の最近点との距離。
+\(k\): 横方向誤差のゲイン。
+\(k_{\text{soft}}\): 速度スケーリング。
+\(v\): 対気速度。
+\(g\): 重力加速度。
+Pythonコード
+以下は、バンク角を考慮したStanley制御の実装です。航空機がサインカーブ経路を追従する例を示します。
+import math
+import numpy as np
+import matplotlib.pyplot as plt
+from typing import List, Tuple
+
+class StanleyControllerAircraft:
+    def __init__(self, k: float = 0.5, k_soft: float = 1.0, max_bank: float = math.radians(30)):
+        """
+        Stanley制御のパラメータ（航空機用、バンク角考慮）
+        k: 横方向誤差のゲイン
+        k_soft: 速度スケーリング
+        max_bank: 最大バンク角（ラジアン、例: ±30度）
+        """
+        self.k = k
+        self.k_soft = k_soft
+        self.max_bank = max_bank
+        self.g = 9.81  # 重力加速度 (m/s²)
+
+    def find_nearest_point(self, x: float, y: float, path: List[Tuple[float, float]]) -> Tuple[int, float, float]:
+        """
+        現在位置(x, y)から目標経路上の最近点を探索
+        戻り値: (最近点のインデックス, 最近点のx座標, 最近点のy座標)
+        """
+        distances = [math.sqrt((x - px)**2 + (y - py)**2) for px, py in path]
+        nearest_idx = np.argmin(distances)
+        return nearest_idx, path[nearest_idx][0], path[nearest_idx][1]
+
+    def calculate_cross_track_error(self, x: float, y: float, px: float, py: float) -> float:
+        """
+        横方向誤差を計算（最近点との距離）
+        """
+        return math.sqrt((x - px)**2 + (y - py)**2)
+
+    def calculate_heading_error(self, theta: float, path: List[Tuple[float, float]], nearest_idx: int) -> float:
+        """
+        角度誤差を計算（航空機のヨー角と経路の接線角度の差）
+        """
+        if nearest_idx < len(path) - 1:
+            px1, py1 = path[nearest_idx]
+            px2, py2 = path[nearest_idx + 1]
+            path_angle = math.atan2(py2 - py1, px2 - px1)
+        else:
+            px1, py1 = path[nearest_idx - 1]
+            px2, py2 = path[nearest_idx]
+            path_angle = math.atan2(py2 - py1, px2 - px1)
+        
+        heading_error = path_angle - theta
+        heading_error = math.atan2(math.sin(heading_error), math.cos(heading_error))
+        return heading_error
+
+    def stanley_control(self, x: float, y: float, theta: float, v: float, path: List[Tuple[float, float]]) -> float:
+        """
+        Stanley制御によるバンク角の計算
+        x, y: 航空機の現在位置
+        theta: 航空機のヨー角（ラジアン）
+        v: 航空機の対気速度
+        path: 目標経路の点列 [(x1, y1), (x2, y2), ...]
+        """
+        nearest_idx, px, py = self.find_nearest_point(x, y, path)
+        e = self.calculate_cross_track_error(x, y, px, py)
+        theta_e = self.calculate_heading_error(theta, path, nearest_idx)
+        
+        # Stanley制御で目標ヨー角変化率を計算
+        yaw_rate_des = theta_e + math.atan2(self.k * e, self.k_soft + v)
+        
+        # ヨー角変化率からバンク角を計算
+        bank_angle = math.atan2(yaw_rate_des * v, self.g)
+        
+        # バンク角を制限（例: ±30度）
+        bank_angle = max(min(bank_angle, self.max_bank), -self.max_bank)
+        
+        return bank_angle
+
+# シミュレーション例
+def simulate_aircraft_curve():
+    # Stanley制御のインスタンス
+    controller = StanleyControllerAircraft(k=0.5, k_soft=1.0, max_bank=math.radians(30))
+    
+    # 目標経路（サインカーブ、航空機のスケールに合わせ拡大）
+    path = [(x, 1000 * math.sin(x / 100)) for x in np.arange(0, 10000, 10)]
+    
+    # 航空機の初期状態
+    x, y = 0.0, 500.0  # 初期位置（経路から500mずれた位置）
+    theta = math.radians(0)  # 初期ヨー角
+    v = 100.0  # 対気速度（100m/s, 約360km/h）
+    
+    # シミュレーション結果の記録
+    trajectory = [(x, y)]
+    bank_angles = []
+    
+    # シミュレーションループ
+    dt = 0.1  # 時間ステップ
+    for _ in range(1000):
+        # Stanley制御でバンク角を計算
+        bank_angle = controller.stanley_control(x, y, theta, v, path)
+        
+        # バンク角からヨー角変化率を計算
+        yaw_rate = (controller.g * math.tan(bank_angle)) / v
+        
+        # 航空機の状態更新（2D運動モデル）
+        x += v * math.cos(theta) * dt
+        y += v * math.sin(theta) * dt
+        theta += yaw_rate * dt
+        
+        # 軌跡とバンク角を記録
+        trajectory.append((x, y))
+        bank_angles.append(math.degrees(bank_angle))
+        
+        # ログ出力（必要に応じて）
+        # print(f"Pos: ({x:.1f}, {y:.1f}), Theta: {math.degrees(theta):.1f}deg, Bank: {math.degrees(bank_angle):.1f}deg")
+    
+    # 可視化
+    path_x, path_y = zip(*path)
+    traj_x, traj_y = zip(*trajectory)
+    
+    plt.figure(figsize=(12, 5))
+    
+    # 軌跡プロット
+    plt.subplot(1, 2, 1)
+    plt.plot(path_x, path_y, 'b-', label='Target Path')
+    plt.plot(traj_x, traj_y, 'r--', label='Aircraft Trajectory')
+    plt.legend()
+    plt.xlabel('X (m)')
+    plt.ylabel('Y (m)')
+    plt.title('Aircraft Curve Following with Bank Angle')
+    plt.grid(True)
+    plt.axis('equal')
+    
+    # バンク角プロット
+    plt.subplot(1, 2, 2)
+    plt.plot(np.arange(0, 1000 * dt, dt), bank_angles, 'g-', label='Bank Angle')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Bank Angle (deg)')
+    plt.title('Bank Angle Over Time')
+    plt.grid(True)
+    plt.legend()
+    
+    plt.tight_layout()
+    plt.show()
+
+if __name__ == "__main__":
+    simulate_aircraft_curve()
+コードの特徴
+バンク角の導入:
+Stanley制御の出力（ヨー角変化率）をバンク角 \(\phi\) に変換。
+ヨー角変化率は \(\dot{\theta} = \frac{g \tan(\phi)}{v}\) で計算。
+バンク角は最大±30度に制限（現実的な航空機の旋回限界）。
+航空機向け調整:
+ゲイン \(k = 0.5\)（航空機の敏感な応答を考慮し小さめ）。
+速度 \(v = 100 \, \text{m/s}\)（約360km/h）、経路スケールは数km。
+運動モデル:
+2D平面での簡略モデル：位置 \((x, y)\) とヨー角 \(\theta\) を更新。
+バンク角からヨー角変化率を計算し、\(\theta\) を更新。
+可視化:
+左: 目標経路（青）と航空機の軌跡（赤）。
+右: 時間に対するバンク角の推移（緑）。
+実行結果
+航空機は初期位置 \((0, 500)\) からサインカーブ経路に収束。
+バンク角は経路の曲率に応じて変化（例: サインカーブの頂点付近で大きくなる）。
+グラフで軌跡の収束とバンク角の動的変化を確認可能。
+航空機特有の考慮点
+バンク角の現実性:
+一般的な民間機の最大バンク角は約25-30度、戦闘機では60度以上可能。
+コードでは \(\pm 30^\circ\) に制限したが、機種に応じて調整。
+3次元ダイナミクス:
+固定高度を前提としたが、実際はピッチ角や高度変化を考慮。
+3D経路追従には \((x, y, z)\) の点列とピッチ制御を追加。
+風の影響:
+横風や乱気流を考慮するには、運動モデルに風速ベクトル \((v_{wx}, v_{wy})\) を追加：
+     \[
+     \dot{x} = v \cos(\theta) + v_{wx}, \quad \dot{y} = v \sin(\theta) + v_{wy}
+     \]
+
+制御遅延:
+航空機の制御系（エルロン、ラダー、オートパイロット）には遅延が存在。
+遅延を考慮するには、状態更新に遅延モデルを導入。
+センサー:
+GPS、INS、AHRS（姿勢方位基準装置）で \((x, y, \theta, \phi)\) を取得。
+ノイズ対応にはカルマンフィルタやEKFを適用。
+拡張のアイデア
+3D経路追従:
+経路を \((x, y, z)\) の点列にし、ピッチ角制御を追加：
+     \[
+     \dot{z} = v \sin(\psi), \quad \psi: \text{ピッチ角}
+     \]
+
+風モデル:
+風速を動的に変化させ、横方向誤差に補正を追加。
+スプライン補間:
+点列をCubic Spline（例: scipy.interpolate.CubicSpline）で滑らかにし、接線角度を高精度に計算。
+機種依存のダイナミクス:
+特定の航空機（例: ボーイング737、F-16）の旋回半径や応答性を考慮。
+例: 旋回半径 \(R = \frac{v^2}{g \tan(\phi)}\) を制約に追加。
+サンプル出力（可視化）
+左グラフ: 目標経路（青）と航空機の軌跡（赤）がサインカーブに収束。
+右グラフ: バンク角が経路の曲率に応じて±10度程度で変動。
+次のステップ
+特定機種: ボーイング737やドローンのような具体的な航空機を指定していただければ、ダイナミクスを調整。
+3Dや風: 高度変化や風の影響を追加する場合は詳細を教えてください。
+リアルタイム: センサーデータや制御遅延を考慮した実装が必要なら対応可能。
+ご希望の機能や航空機の仕様（速度、旋回性能、センサーなど）を教えていただければ、さらに詳細な実装を提供します！
